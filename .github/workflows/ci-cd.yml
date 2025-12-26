@@ -1,55 +1,59 @@
-name: Prodction CI/CD Pipeline
+name: Production CI/CD Pipeline
 
 on:
-    push:
-        branches: ["main"]
-    workflow_dispatch:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
 
 env:
-    APP_NAME: ${{ vars.APP_NAME }}
-    AWS_REGION: ${{vars.AWS_REGION }}
+  APP_NAME: ${{ vars.APP_NAME }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
 
 jobs:
 
-    build:
-        runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-        steps:
-            -   name: Checkout Code
-                uses: actions/Checkout@v4
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-            -   name: Build Docker Image
-                run: |
-                    docker build -t $APP_NAME
+      - name: Build Docker Image
+        run: |
+          docker build -t $APP_NAME .
 
-            -   name: Save Image as Artifact
-                run: |
-                    docker save $APP_NAME | gzip > image.tar.gz
+      - name: Save Image as Artifact
+        run: |
+          docker save $APP_NAME | gzip > image.tar.gz
 
-            -   name: Upload Artifact
-                uses: actions/upload-artifact@v4
-                with:
-                    name: docker-image
-                    path: image.tar.gz
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: image.tar.gz
 
-    deploy:
-        needs: build
-        runs-on: ubuntu-latest
-        environment: production
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
 
-        steps: 
-            -   name: Download Artifact
-                uses: actions/download-artifact@v4
-                with:
-                    name: docker-image
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
 
-            -   name: Deploy to EC2
-                uses: appleboy/ssh-action@v1.0.3
-                with: 
-                    host: ${{ secrets.EC2_HOST }}
-                    username: ${{ secrets.EC2_USER }}
-                    key: ${{ secrets.EC2_SSH_KEY }}
-                    script: |
-                        docker stop $APP_NAME || true
-                        docker rm $APP_NAME || true
-                        docker run -d -p 80:80 --name $APP_NAME $APP_NAME
+      - name: Load Docker Image
+        run: |
+          gunzip -c image.tar.gz | docker load
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker stop $APP_NAME || true
+            docker rm $APP_NAME || true
+            docker run -d -p 80:80 --name $APP_NAME $APP_NAME
