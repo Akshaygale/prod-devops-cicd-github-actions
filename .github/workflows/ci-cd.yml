@@ -47,13 +47,20 @@ jobs:
         run: |
           gunzip -c image.tar.gz | docker load
 
-      - name: Deploy to EC2
+      - name: Deploy on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            docker stop $APP_NAME || true
-            docker rm $APP_NAME || true
-            docker run -d -p 80:80 --name $APP_NAME $APP_NAME
+            host: ${{ secrets.EC2_HOST }}
+            username: ${{ secrets.EC2_USER }}
+            key: ${{ secrets.EC2_SSH_KEY }}
+            envs: APP_NAME
+            script: |
+                echo "Deploying $APP_NAME"
+
+                cd /home/ubuntu
+                docker load < image.tar.gz
+
+                docker stop $APP_NAME || true
+                docker rm $APP_NAME || true
+
+                docker run -d -p 80:80 --name $APP_NAME $APP_NAME
