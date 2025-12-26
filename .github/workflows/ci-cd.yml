@@ -7,21 +7,22 @@ on:
 
 env:
   APP_NAME: ${{ vars.APP_NAME }}
-  AWS_REGION: ${{ vars.AWS_REGION }}
 
 jobs:
+
   build:
+    name: Build Image
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Build Docker Image
         run: |
           docker build -t $APP_NAME .
 
-      - name: Save Image as Artifact
+      - name: Save Image
         run: |
           docker save $APP_NAME | gzip > image.tar.gz
 
@@ -32,8 +33,9 @@ jobs:
           path: image.tar.gz
 
   deploy:
+    name: Deploy to Production
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: production
 
     steps:
@@ -42,30 +44,10 @@ jobs:
         with:
           name: docker-image
 
-      - name: Copy Image to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "image.tar.gz"
-          target: "/home/ubuntu"
+      - name: Load & Run
+        run: |
+          docker load < image.tar.gz
+          docker stop $APP_NAME || true
+          docker rm $APP_NAME || true
+          docker run -d -p 80:80 --name $APP_NAME $APP_NAME
 
-      - name: Deploy on EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          envs: APP_NAME
-          script: |
-            set -e
-            echo "Deploying $APP_NAME"
-
-            cd /home/ubuntu
-            ls -l
-
-            docker load < image.tar.gz
-            docker stop $APP_NAME || true
-            docker rm $APP_NAME || true
-            docker run -d -p 80:80 --name $APP_NAME $APP_NAME
